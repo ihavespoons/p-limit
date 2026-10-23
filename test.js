@@ -199,16 +199,21 @@ const testClearQueueRejects = process.versions.node.startsWith('20.') ? test.ski
 testClearQueueRejects('clearQueue rejects pending promises when enabled', async t => {
 	const limit = pLimit({concurrency: 1, rejectOnClear: true});
 
-	const runningPromise = limit(() => delay(100));
-	const pendingPromiseOne = limit(() => delay(10));
-	const pendingPromiseTwo = limit(() => delay(10));
+	let releaseRunning;
+	const runningPromise = limit(() => new Promise(resolve => {
+		releaseRunning = resolve;
+	}));
+	const pendingPromiseOne = limit(() => 1);
+	const pendingPromiseTwo = limit(() => 2);
 
 	await Promise.resolve();
 	t.is(limit.pendingCount, 2);
 
 	limit.clearQueue();
 	t.is(limit.pendingCount, 0);
+	t.is(limit.activeCount, 1);
 
+	releaseRunning();
 	await runningPromise;
 	await t.throwsAsync(pendingPromiseOne, {name: 'AbortError'});
 	await t.throwsAsync(pendingPromiseTwo, {name: 'AbortError'});
